@@ -37,6 +37,7 @@ private:
     std::string target_frame_;
     bool use_transform_;
     double merge_timeout_;
+    std::mutex merge_mutex_;  // Protect shared state
     
 public:
     CloudMerger() : nh_("~")
@@ -86,6 +87,8 @@ public:
     
     void tryMerge()
     {
+        std::lock_guard<std::mutex> lock(merge_mutex_);
+        
         // Check if we have received data from all sensors
         if (!latest_cloud1_ || !latest_cloud2_ || !latest_cloud3_ || !latest_cloud4_)
             return;

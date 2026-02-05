@@ -54,6 +54,9 @@ pcl::PointCloud<PointType>::Ptr laserCloudFullRes(new pcl::PointCloud<PointType>
 Eigen::Quaterniond q_w_curr(1, 0, 0, 0);
 Eigen::Vector3d t_w_curr(0, 0, 0);
 
+// Store last transformation for incremental registration
+Eigen::Matrix4d last_transformation = Eigen::Matrix4d::Identity();
+
 // Odometry path
 nav_msgs::Path laserPath;
 
@@ -161,7 +164,15 @@ int main(int argc, char **argv)
                 timeSurfPointsFlat != timeLaserCloudFullRes ||
                 timeSurfPointsLessFlat != timeLaserCloudFullRes)
             {
-                ROS_WARN("Unsync messages!");
+                ROS_WARN("Unsync messages! Removing oldest message.");
+                mBuf.lock();
+                // Remove the oldest message to allow resynchronization
+                if (!cornerSharpBuf.empty()) cornerSharpBuf.pop();
+                if (!cornerLessSharpBuf.empty()) cornerLessSharpBuf.pop();
+                if (!surfFlatBuf.empty()) surfFlatBuf.pop();
+                if (!surfLessFlatBuf.empty()) surfLessFlatBuf.pop();
+                if (!fullPointsBuf.empty()) fullPointsBuf.pop();
+                mBuf.unlock();
                 continue;
             }
 
@@ -223,11 +234,9 @@ int main(int argc, char **argv)
                     ndt.setInputSource(currentScan);
                     ndt.setInputTarget(lastScan);
 
-                    // Create initial guess from previous transformation
-                    Eigen::Matrix4f initial_guess = Eigen::Matrix4f::Identity();
-                    Eigen::Quaternionf q_guess(q_w_curr.cast<float>());
-                    initial_guess.block<3, 3>(0, 0) = q_guess.toRotationMatrix();
-                    initial_guess.block<3, 1>(0, 3) = t_w_curr.cast<float>();
+                    // Use identity transformation as initial guess
+                    // (NDT will find the transformation from lastScan to currentScan)
+                    Eigen::Matrix4f initial_guess = last_transformation.cast<float>();
 
                     // Perform NDT registration
                     pcl::PointCloud<PointType>::Ptr aligned(new pcl::PointCloud<PointType>());
@@ -235,17 +244,24 @@ int main(int argc, char **argv)
 
                     if (ndt.hasConverged())
                     {
-                        // Get the transformation result
+                        // Get the incremental transformation from last to current frame
                         Eigen::Matrix4f transformation = ndt.getFinalTransformation();
                         
-                        // Extract rotation and translation
+                        // Store for next iteration
+                        last_transformation = transformation.cast<double>();
+                        
+                        // Extract rotation and translation from incremental transform
                         Eigen::Matrix3f rotation = transformation.block<3, 3>(0, 0);
                         Eigen::Vector3f translation = transformation.block<3, 1>(0, 3);
                         
-                        // Update pose
-                        Eigen::Quaternionf q_result(rotation);
-                        q_w_curr = q_result.cast<double>();
-                        t_w_curr = translation.cast<double>();
+                        // Update accumulated pose
+                        Eigen::Quaterniond q_incr(rotation.cast<double>());
+                        Eigen::Vector3d t_incr = translation.cast<double>();
+                        
+                        // Accumulate: T_w_curr = T_w_last * T_last_curr
+                        t_w_curr = q_w_curr * t_incr + t_w_curr;
+                        q_w_curr = q_w_curr * q_incr;
+                        q_w_curr.normalize();
 
                         ROS_DEBUG("NDT converged. Score: %.4f, Iterations: %d",
                                  ndt.getFitnessScore(), ndt.getFinalNumIteration());
