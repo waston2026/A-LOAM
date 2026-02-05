@@ -16,6 +16,7 @@ find_package(catkin REQUIRED COMPONENTS
   image_transport
   cv_bridge
   tf
+  pcl_ros
 )
 
 #find_package(Eigen3 REQUIRED)
@@ -49,6 +50,9 @@ target_link_libraries(alaserMapping ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${CERES
 add_executable(kittiHelper src/kittiHelper.cpp)
 target_link_libraries(kittiHelper ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBS})
 
+# New nodes for multi-sensor fusion and NDT-based odometry
+add_executable(cloudMerger src/cloudMerger.cpp)
+target_link_libraries(cloudMerger ${catkin_LIBRARIES} ${PCL_LIBRARIES})
 
-
-
+add_executable(alaserOdometryNDT src/laserOdometryNDT.cpp)
+target_link_libraries(alaserOdometryNDT ${catkin_LIBRARIES} ${PCL_LIBRARIES})

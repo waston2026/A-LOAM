@@ -1,0 +1,59 @@
+<launch>
+    
+    <!-- Multi-sensor configuration (4 small FOV sensors) -->
+    <param name="scan_line" type="int" value="16" />
+    
+    <!-- if 1, do mapping 10 Hz, if 2, do mapping 5 Hz -->
+    <param name="mapping_skip_frame" type="int" value="1" />
+    
+    <!-- remove too closed points -->
+    <param name="minimum_range" type="double" value="0.3"/>
+    
+    <!-- NDT parameters for registration (corresponds to paper section 3.2.3) -->
+    <!-- Voxel grid resolution for NDT (default: 1.0 meter) -->
+    <param name="ndt_resolution" type="double" value="1.0"/>
+    
+    <!-- Step size for More-Thuente line search (default: 0.1) -->
+    <param name="ndt_step_size" type="double" value="0.1"/>
+    
+    <!-- Maximum number of registration iterations (default: 30) -->
+    <param name="ndt_max_iterations" type="int" value="30"/>
+    
+    <!-- Transformation epsilon for convergence (default: 0.01) -->
+    <param name="ndt_transformation_epsilon" type="double" value="0.01"/>
+    
+    <param name="mapping_line_resolution" type="double" value="0.2"/>
+    <param name="mapping_plane_resolution" type="double" value="0.4"/>
+    
+    <!-- Cloud Merger Node: Combines 4 sensor point clouds -->
+    <!-- Configure sensor topic names as needed -->
+    <node pkg="aloam_velodyne" type="cloudMerger" name="cloudMerger" output="screen">
+        <param name="target_frame" type="string" value="base_link"/>
+        <param name="use_transform" type="bool" value="true"/>
+        <param name="merge_timeout" type="double" value="0.1"/>
+        
+        <!-- Remap to your actual sensor topics -->
+        <remap from="/sensor1/points" to="/sensor1/velodyne_points"/>
+        <remap from="/sensor2/points" to="/sensor2/velodyne_points"/>
+        <remap from="/sensor3/points" to="/sensor3/velodyne_points"/>
+        <remap from="/sensor4/points" to="/sensor4/velodyne_points"/>
+    </node>
+    
+    <!-- Feature Extraction (corresponds to paper section 3.2.2) -->
+    <node pkg="aloam_velodyne" type="ascanRegistration" name="ascanRegistration" output="screen">
+        <!-- Use merged cloud as input -->
+        <remap from="/velodyne_points" to="/merged_cloud"/>
+    </node>
+    
+    <!-- NDT-based Laser Odometry (corresponds to paper section 3.2.3) -->
+    <node pkg="aloam_velodyne" type="alaserOdometryNDT" name="alaserOdometryNDT" output="screen" />
+    
+    <!-- Laser Mapping (backend) -->
+    <node pkg="aloam_velodyne" type="alaserMapping" name="alaserMapping" output="screen" />
+    
+    <arg name="rviz" default="true" />
+    <group if="$(arg rviz)">
+        <node launch-prefix="nice" pkg="rviz" type="rviz" name="rviz" args="-d $(find aloam_velodyne)/rviz_cfg/aloam_velodyne.rviz" />
+    </group>
+
+</launch>
