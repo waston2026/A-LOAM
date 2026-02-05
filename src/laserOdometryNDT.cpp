@@ -140,10 +140,9 @@ int main(int argc, char **argv)
     ndt.setTransformationEpsilon(ndt_transformation_epsilon);
 
     ros::Rate rate(100);
-    bool status = ros::ok();
     int frameCount = 0;
     
-    while (status)
+    while (ros::ok())
     {
         ros::spinOnce();
 
@@ -197,6 +196,14 @@ int main(int argc, char **argv)
             }
             else
             {
+                // NDT-based registration approach (Section 3.2.3)
+                // Unlike original LOAM which uses point-to-line and point-to-plane correspondences,
+                // NDT uses voxel-based probabilistic matching:
+                // - Divides space into voxels
+                // - Models each voxel as a Gaussian distribution (mean μ, covariance Σ)
+                // - Optimizes transformation by maximizing likelihood
+                // This approach is more robust for multi-sensor fusion and varying point densities
+                
                 // Combine corner and surface features for NDT registration
                 pcl::PointCloud<PointType>::Ptr currentScan(new pcl::PointCloud<PointType>());
                 pcl::PointCloud<PointType>::Ptr lastScan(new pcl::PointCloud<PointType>());
@@ -311,7 +318,6 @@ int main(int argc, char **argv)
             ROS_DEBUG("whole laserOdometry time: %f ms", t_whole.toc());
         }
 
-        status = ros::ok();
         rate.sleep();
     }
     return 0;
